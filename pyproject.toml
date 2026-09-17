@@ -94,6 +94,7 @@ doc = [
     "pydata-sphinx-theme",
     "pyebsdindex                  >= 0.3.9.2, != 0.3.10",
     "pyvista",
+    "scikit-optimize",
     "sphinx                       >= 3.0.2",
     "sphinx-codeautolink[ipython] <  0.14",
     "sphinx-copybutton            >= 0.2.5",
