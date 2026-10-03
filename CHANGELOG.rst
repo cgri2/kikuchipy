@@ -26,6 +26,9 @@ Added
 
 Fixed
 -----
+- Hough indexing, dictionary indexing, and refinement of a single pattern (without
+  navigation axes) no longer create a crystal map with coordinates of 50 points instead
+  of one, and refinement of such a pattern no longer fails. (#816)
 
 Changed
 -------

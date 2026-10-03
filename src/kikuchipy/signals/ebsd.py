@@ -3019,7 +3019,7 @@ class EBSD(KikuchipySignal2D):
         # Flatten dimensions for masking
         am = self.axes_manager
         patterns = da.atleast_3d(patterns)
-        patterns = patterns.reshape((am.navigation_size, am.signal_size))
+        patterns = patterns.reshape((max(am.navigation_size, 1), am.signal_size))
 
         if not points_to_refine.all():
             patterns = patterns[points_to_refine, :]
