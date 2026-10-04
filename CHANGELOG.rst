@@ -55,6 +55,10 @@ Fixed
 
 Changed
 -------
+- Minimum version of NumPy is 1.25 and of Numba is 0.58, since the optional
+  dependency ``bayesian-optimization`` requires NumPy >= 1.25, which Numba supports from
+  version 0.58.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
 - The normalized cross-correlation metric "ncc" returns a score of zero instead of NaN
   for flat patterns.
   (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
