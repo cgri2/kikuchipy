@@ -37,6 +37,10 @@ or together:
   :func:`~kikuchipy.pattern.optimize_adaptive_histogram_equalization`
 * FFT bandpass filtering: :func:`~kikuchipy.pattern.optimize_bandpass_filter`
 * All of the above, in any order: :func:`~kikuchipy.pattern.optimize_pattern_processing`
+
+The Bayesian optimization of pattern processing parameters was first used in
+:cite:`griesbach2026ferroelectric` and :cite:`griesbach2026global` to map ferroelectric
+polarization domains.
 """
 
 # %%
