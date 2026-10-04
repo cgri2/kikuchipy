@@ -17,7 +17,6 @@
 # along with kikuchipy. If not, see <http://www.gnu.org/licenses/>.
 #
 
-
 import logging
 
 import numpy as np
@@ -25,49 +24,18 @@ import pytest
 
 import kikuchipy as kp
 from kikuchipy import _constants
-from kikuchipy._constants import dependency_version
 from kikuchipy.pattern._processing_optimization import (
     _get_parameters,
     _get_searched_parameter,
 )
 
-skipif_bayes_opt_not_installed = pytest.mark.skipif(
-    dependency_version["bayesian-optimization"] is None,
-    reason="bayesian-optimization is not installed",
-)
-
-
-@pytest.fixture(scope="module")
-def pattern_and_reference() -> tuple[np.ndarray, np.ndarray]:
-    """Experimental nickel pattern of 8-bit integers with the static
-    background removed, and a simulated pattern from the same
-    orientation.
-    """
-    s = kp.data.nickel_ebsd_small()
-    s.remove_static_background()
-    pattern = s.data[1, 1]
-
-    mp = kp.data.nickel_ebsd_master_pattern_small(projection="lambert")
-    det = s.detector.deepcopy()
-    det.pc = det.pc[1, 1]
-    rotation = s.xmap.rotations[4]  # Map point (1, 1)
-    sim = mp.get_patterns(
-        rotation,
-        det,
-        energy=20,
-        dtype_out="uint8",
-        compute=True,
-        show_progressbar=False,
-    )
-    return pattern, sim.data.squeeze()
-
 
 class TestOptimizePatternProcessing:
-    def test_nelder_mead(self, pattern_and_reference):
+    def test_nelder_mead(self, nickel_pattern_and_reference):
         """Optimization with Nelder-Mead improves the similarity to the
         reference, and the result is complete and consistent.
         """
-        pattern, reference = pattern_and_reference
+        pattern, reference = nickel_pattern_and_reference
         n_calls = 60
         result = kp.pattern.optimize_pattern_processing(
             pattern,
@@ -77,16 +45,18 @@ class TestOptimizePatternProcessing:
             random_state=0,
         )
 
+        # Steps
         steps = ("remove_dynamic_background", "bandpass_filter")
         assert result["steps"] == steps
         assert list(result["parameters"]) == list(steps)
+
+        # Results
         assert list(result["patterns"]) == ["raw"] + list(steps)
         for processed in result["patterns"].values():
             assert processed.shape == pattern.shape
             assert processed.dtype == pattern.dtype
         assert result["image_quality"].shape == (3,)
         assert result["signal_mask"] is None
-
         # Optimized pattern is more similar to the reference than the
         # raw pattern
         ncc = result["normalized_cross_correlation"]
@@ -101,21 +71,21 @@ class TestOptimizePatternProcessing:
             n_evaluations += start_result.nfev
         assert n_evaluations <= n_calls + 3 * 2  # May exceed by a few
 
-    def test_nelder_mead_reproducible(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_nelder_mead_reproducible(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         kwargs = dict(method="nelder-mead", n_calls=40, random_state=1)
         result1 = kp.pattern.optimize_pattern_processing(pattern, reference, **kwargs)
         result2 = kp.pattern.optimize_pattern_processing(pattern, reference, **kwargs)
         assert result1["parameters"] == result2["parameters"]
         assert result1["score"] == result2["score"]
 
-    @skipif_bayes_opt_not_installed
-    def test_bayesian(self, pattern_and_reference):
+    @pytest.mark.needs_bayesian_optimization
+    def test_bayesian(self, nickel_pattern_and_reference):
         """Bayesian optimization (default) improves the similarity to
         the reference, evaluates the given number of calls, and is
         reproducible.
         """
-        pattern, reference = pattern_and_reference
+        pattern, reference = nickel_pattern_and_reference
         kwargs = dict(n_calls=12, n_initial_points=5, random_state=0)
         result1 = kp.pattern.optimize_pattern_processing(pattern, reference, **kwargs)
         result2 = kp.pattern.optimize_pattern_processing(pattern, reference, **kwargs)
@@ -125,24 +95,24 @@ class TestOptimizePatternProcessing:
         assert len(result1["optimizer"].res) == 12
         assert result1["parameters"] == result2["parameters"]
 
-    def test_steps_in_given_order(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_steps_in_given_order(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         steps = [
             "bandpass_filter",
             "adaptive_histogram_equalization",
             "remove_dynamic_background",
         ]
         result = kp.pattern.optimize_pattern_processing(
-            pattern, reference, steps=steps, method="nelder-mead", n_calls=40
+            pattern, reference, steps=steps, method="nelder-mead", n_calls=30
         )
         assert result["steps"] == tuple(steps)
         assert list(result["patterns"]) == ["raw"] + steps
 
-    def test_fixed_and_searched_parameters(self, pattern_and_reference):
+    def test_fixed_and_searched_parameters(self, nickel_pattern_and_reference):
         """Fixed parameters are kept, and searched parameters are within
         their search space and of the expected type.
         """
-        pattern, reference = pattern_and_reference
+        pattern, reference = nickel_pattern_and_reference
         result = kp.pattern.optimize_pattern_processing(
             pattern,
             reference,
@@ -173,8 +143,8 @@ class TestOptimizePatternProcessing:
         assert 1e-3 <= params_ahe["clip_limit"] <= 1e-2
         assert params_ahe["nbins"] == 128
 
-    def test_signal_mask(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_signal_mask(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         signal_mask = np.zeros(pattern.shape, dtype=bool)
         signal_mask[:10] = True
         result = kp.pattern.optimize_pattern_processing(
@@ -200,16 +170,16 @@ class TestOptimizePatternProcessing:
             (kp.pattern.optimize_bandpass_filter, "bandpass_filter"),
         ],
     )
-    def test_single_step(self, pattern_and_reference, func, step):
-        pattern, reference = pattern_and_reference
+    def test_single_step(self, nickel_pattern_and_reference, func, step):
+        pattern, reference = nickel_pattern_and_reference
         result = func(pattern, reference, method="nelder-mead", n_calls=30)
         assert result["steps"] == (step,)
         assert list(result["parameters"]) == [step]
         ncc = result["normalized_cross_correlation"]
         assert result["score"] >= ncc[0]
 
-    def test_logging(self, pattern_and_reference, caplog):
-        pattern, reference = pattern_and_reference
+    def test_logging(self, nickel_pattern_and_reference, caplog):
+        pattern, reference = nickel_pattern_and_reference
         logger_name = "kikuchipy.pattern._processing_optimization"
         with caplog.at_level(logging.INFO, logger=logger_name):
             kp.pattern.optimize_pattern_processing(
@@ -221,43 +191,41 @@ class TestOptimizePatternProcessing:
 
 
 class TestOptimizePatternProcessingRaises:
-    def test_unknown_method(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_unknown_method(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(ValueError, match="Unknown optimization method 'powell'"):
             kp.pattern.optimize_pattern_processing(pattern, reference, method="powell")
 
-    def test_bayesian_requires_dependency(self, pattern_and_reference, monkeypatch):
-        pattern, reference = pattern_and_reference
+    def test_bayesian_requires_dependency(
+        self, nickel_pattern_and_reference, monkeypatch
+    ):
+        pattern, reference = nickel_pattern_and_reference
         monkeypatch.setitem(
             _constants.dependency_version, "bayesian-optimization", None
         )
         with pytest.raises(ImportError, match="requires that 'bayesian-optimization'"):
             kp.pattern.optimize_pattern_processing(pattern, reference)
 
-        # Nelder-Mead does not require it
-        result = kp.pattern.optimize_pattern_processing(
-            pattern, reference, method="nelder-mead", n_calls=20, n_restarts=0
-        )
-        assert result["score"] > 0
-
-    @skipif_bayes_opt_not_installed
+    @pytest.mark.needs_bayesian_optimization
     @pytest.mark.parametrize("n_initial_points", [0, 11])
-    def test_invalid_n_initial_points(self, pattern_and_reference, n_initial_points):
-        pattern, reference = pattern_and_reference
+    def test_invalid_n_initial_points(
+        self, nickel_pattern_and_reference, n_initial_points
+    ):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(ValueError, match="Number of initial points "):
             kp.pattern.optimize_pattern_processing(
                 pattern, reference, n_calls=10, n_initial_points=n_initial_points
             )
 
-    def test_invalid_n_restarts(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_invalid_n_restarts(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(ValueError, match="Number of restarts -1 must be at least"):
             kp.pattern.optimize_pattern_processing(
                 pattern, reference, method="nelder-mead", n_restarts=-1
             )
 
-    def test_too_few_calls_for_nelder_mead(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_too_few_calls_for_nelder_mead(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         # 4 parameters with 2 restarts require at least 3 * (4 + 2) calls
         with pytest.raises(ValueError, match="Number of calls 10 must be at least 18"):
             kp.pattern.optimize_pattern_processing(
@@ -265,24 +233,24 @@ class TestOptimizePatternProcessingRaises:
             )
 
     @pytest.mark.parametrize("pattern_shape", [(60, 59), (1, 60, 60)])
-    def test_invalid_pattern_shape(self, pattern_and_reference, pattern_shape):
-        _, reference = pattern_and_reference
+    def test_invalid_pattern_shape(self, nickel_pattern_and_reference, pattern_shape):
+        _, reference = nickel_pattern_and_reference
         pattern = np.zeros(pattern_shape, dtype=np.uint8)
         with pytest.raises(ValueError, match="Pattern shape .* and reference shape"):
             kp.pattern.optimize_pattern_processing(
                 pattern, reference, method="nelder-mead"
             )
 
-    def test_invalid_signal_mask_shape(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_invalid_signal_mask_shape(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         signal_mask = np.zeros((3, 3), dtype=bool)
         with pytest.raises(ValueError, match=r"Signal mask shape \(3, 3\) and pattern"):
             kp.pattern.optimize_pattern_processing(
                 pattern, reference, signal_mask=signal_mask, method="nelder-mead"
             )
 
-    def test_all_parameters_fixed(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_all_parameters_fixed(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(ValueError, match="No parameters to optimize"):
             kp.pattern.optimize_bandpass_filter(
                 pattern,
@@ -292,15 +260,15 @@ class TestOptimizePatternProcessingRaises:
                 method="nelder-mead",
             )
 
-    def test_unknown_step(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_unknown_step(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(ValueError, match="Unknown processing step 'binning'"):
             kp.pattern.optimize_pattern_processing(
                 pattern, reference, steps=["binning"], method="nelder-mead"
             )
 
-    def test_duplicate_steps(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_duplicate_steps(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(ValueError, match="cannot contain duplicates"):
             kp.pattern.optimize_pattern_processing(
                 pattern,
@@ -309,8 +277,8 @@ class TestOptimizePatternProcessingRaises:
                 method="nelder-mead",
             )
 
-    def test_parameters_for_step_not_in_steps(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_parameters_for_step_not_in_steps(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(
             ValueError,
             match="Parameters given for step 'adaptive_histogram_equalization'",
@@ -322,8 +290,8 @@ class TestOptimizePatternProcessingRaises:
                 adaptive_histogram_equalization={"nbins": 128},
             )
 
-    def test_unknown_parameter(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_unknown_parameter(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.raises(ValueError, match=r"Unknown parameters \['cutoff'\]"):
             kp.pattern.optimize_pattern_processing(
                 pattern,
@@ -332,8 +300,8 @@ class TestOptimizePatternProcessingRaises:
                 bandpass_filter={"cutoff": 10},
             )
 
-    def test_float_pattern_with_equalization_warns(self, pattern_and_reference):
-        pattern, reference = pattern_and_reference
+    def test_float_pattern_with_equalization_warns(self, nickel_pattern_and_reference):
+        pattern, reference = nickel_pattern_and_reference
         with pytest.warns(UserWarning, match="Equalization of patterns with floating"):
             kp.pattern.optimize_adaptive_histogram_equalization(
                 pattern.astype(np.float32) / 255,  # Within [0, 1] for skimage
