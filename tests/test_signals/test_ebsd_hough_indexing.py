@@ -24,7 +24,7 @@ from orix.crystal_map import CrystalMap, Phase, PhaseList
 import pytest
 
 import kikuchipy as kp
-from kikuchipy._constants import dependency_version, pyopencl_context_available
+from kikuchipy._constants import pyopencl_context_available
 from kikuchipy.indexing._hough_indexing import (
     _get_info_message,
     _indexer_is_compatible_with_kikuchipy,
@@ -32,9 +32,7 @@ from kikuchipy.indexing._hough_indexing import (
 )
 
 
-@pytest.mark.skipif(
-    dependency_version["pyebsdindex"] is None, reason="pyebsdindex is not installed"
-)
+@pytest.mark.skipif_pyebsdindex_not_installed
 class TestHoughIndexing:
     def setup_method(self):
         s = kp.data.nickel_ebsd_small()
@@ -310,9 +308,7 @@ class TestHoughIndexing:
             _ = _phase_lists_are_compatible(phase_list4, indexer, True)
 
 
-@pytest.mark.skipif(
-    dependency_version["pyebsdindex"] is None, reason="pyebsdindex is not installed"
-)
+@pytest.mark.skipif_pyebsdindex_not_installed
 class TestPCOptimization:
     def setup_method(self):
         s = kp.data.nickel_ebsd_small()
@@ -386,9 +382,7 @@ class TestPCOptimization:
                 _ = s.hough_indexing_optimize_pc(det.pc_average, self.indexer)
 
 
-@pytest.mark.skipif(
-    dependency_version["pyebsdindex"] is not None, reason="pyebsdindex is installed"
-)
+@pytest.mark.skipif_pyebsdindex_installed
 class TestHoughIndexingNoPyEBSDIndex:
     def setup_method(self):
         s = kp.data.nickel_ebsd_small()

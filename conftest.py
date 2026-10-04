@@ -81,16 +81,35 @@ MARKERS = [
     "weekly",
 ]
 
-# Markers for tests requiring an optional dependency, which are skipped
-# if it is not installed
-DEPENDENCY_MARKERS = {
-    "needs_bayesian_optimization": "bayesian-optimization",
+# Markers skipping tests depending on whether an optional dependency is
+# installed, given as {marker: (dependency, skip if installed)}
+SKIPIF_DEPENDENCY_MARKERS = {
+    "skipif_bayesian_optimization_not_installed": ("bayesian-optimization", False),
+    "skipif_ipywidgets_installed": ("ipywidgets", True),
+    "skipif_nlopt_installed": ("nlopt", True),
+    "skipif_nlopt_not_installed": ("nlopt", False),
+    "skipif_pyebsdindex_installed": ("pyebsdindex", True),
+    "skipif_pyebsdindex_not_installed": ("pyebsdindex", False),
+    "skipif_pyvista_installed": ("pyvista", True),
+    "skipif_pyvista_not_installed": ("pyvista", False),
 }
 
 
+def pytest_configure(config):
+    """Register markers skipping tests depending on whether an optional
+    dependency is installed.
+    """
+    for marker, (dependency, skip_if_installed) in SKIPIF_DEPENDENCY_MARKERS.items():
+        if skip_if_installed:
+            description = f"skip test if {dependency} is installed"
+        else:
+            description = f"skip test if {dependency} is not installed"
+        config.addinivalue_line("markers", f"{marker}: {description}")
+
+
 def pytest_runtest_setup(item):
-    """Skip certain tests when flag is missing or a required optional
-    dependency is not installed:
+    """Skip certain tests when flag is missing or depending on whether
+    an optional dependency is installed:
     https://docs.pytest.org/en/stable/reference/reference.html#pytest.hookspec.pytest_runtest_setup.
 
     To run tests marked by this marker *only*, say, `gpu`, do
@@ -102,9 +121,14 @@ def pytest_runtest_setup(item):
             marker_str, default=False
         ):
             pytest.skip(f"Needs {marker_str} flag to run")
-    for marker, dependency in DEPENDENCY_MARKERS.items():
-        if marker in item.keywords and dependency_version[dependency] is None:
-            pytest.skip(f"Needs {dependency!r} installed to run")
+    for marker, (dependency, skip_if_installed) in SKIPIF_DEPENDENCY_MARKERS.items():
+        if marker not in item.keywords:
+            continue
+        is_installed = dependency_version[dependency] is not None
+        if skip_if_installed and is_installed:
+            pytest.skip(f"{dependency} is installed")
+        elif not skip_if_installed and not is_installed:
+            pytest.skip(f"{dependency} is not installed")
 
 
 # ----------------------------- PyVista ------------------------------ #

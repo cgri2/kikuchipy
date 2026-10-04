@@ -201,7 +201,6 @@ filterwarnings = [
 markers = [
     "weekly: mark test as running only weekly on CI",
     "gpu: mark test as running only when wgpu has a GPU available",
-    "needs_bayesian_optimization: mark test as requiring the optional dependency bayesian-optimization",
 ]
 xfail_strict = true
 

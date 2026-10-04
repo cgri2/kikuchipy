@@ -79,7 +79,7 @@ class TestOptimizePatternProcessing:
         assert result1["parameters"] == result2["parameters"]
         assert result1["score"] == result2["score"]
 
-    @pytest.mark.needs_bayesian_optimization
+    @pytest.mark.skipif_bayesian_optimization_not_installed
     def test_bayesian(self, nickel_pattern_and_reference):
         """Bayesian optimization (default) improves the similarity to
         the reference, evaluates the given number of calls, and is
@@ -206,7 +206,7 @@ class TestOptimizePatternProcessingRaises:
         with pytest.raises(ImportError, match="requires that 'bayesian-optimization'"):
             kp.pattern.optimize_pattern_processing(pattern, reference)
 
-    @pytest.mark.needs_bayesian_optimization
+    @pytest.mark.skipif_bayesian_optimization_not_installed
     @pytest.mark.parametrize("n_initial_points", [0, 11])
     def test_invalid_n_initial_points(
         self, nickel_pattern_and_reference, n_initial_points
