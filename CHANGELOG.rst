@@ -18,20 +18,46 @@ Unreleased
 
 Added
 -----
-- ``pattern.optimize_pattern_processing()`` for Bayesian optimization of a single
-  pattern's dynamic background subtraction, adaptive histogram equalization, and FFT
-  bandpass filter parameters against a reference pattern. Requires the optional
-  dependency ``scikit-optimize``. (#816)
-- ``draw.plot_pattern_processing_result()`` for plotting the pattern from each stage of an ``optimize_pattern_processing()`` result, annotated with image quality and normalized cross-correlation. (#816)'
+- Optimization of processing parameters of a single pattern against a reference pattern,
+  scored by the normalized cross-correlation:
+  ``pattern.optimize_remove_dynamic_background()``,
+  ``pattern.optimize_adaptive_histogram_equalization()``, and
+  ``pattern.optimize_bandpass_filter()`` optimize one processing step each, while
+  ``pattern.optimize_pattern_processing()`` optimizes any of these steps together, in
+  any order.
+  Parameters are found by Bayesian optimization, which requires the optional dependency
+  ``bayesian-optimization``, or by local optimization with the Nelder-Mead method with
+  restarts.
+  A signal mask can be passed to exclude pixels from the score.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
+- ``draw.plot_pattern_processing_result()`` for plotting the pattern after each step of
+  a pattern processing optimization, annotated with image quality and normalized
+  cross-correlation.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
+- ``filters.bandpass_fft_filter()`` for creating a band-pass filter transfer function
+  for use with ``EBSD.fft_filter()``, e.g. with parameters from
+  ``pattern.optimize_bandpass_filter()``.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
+- ``pattern.get_signal_mask()`` for getting a signal mask of pixels without Kikuchi
+  diffraction in a pattern by intensity thresholding, for use in e.g. refinement or
+  pattern processing optimization.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
 
 Fixed
 -----
+- ``pattern.remove_dynamic_background()`` no longer fails for patterns with an integer
+  data type, and no longer overwrites patterns with a floating point data type.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
 - Hough indexing, dictionary indexing, and refinement of a single pattern (without
   navigation axes) no longer create a crystal map with coordinates of 50 points instead
-  of one, and refinement of such a pattern no longer fails. (#816)
+  of one.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
 
 Changed
 -------
+- The normalized cross-correlation metric "ncc" returns a score of zero instead of NaN
+  for flat patterns.
+  (`#816 <https://github.com/pyxem/kikuchipy/pull/816>`_)
 
 Removed
 -------
