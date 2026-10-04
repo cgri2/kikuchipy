@@ -86,6 +86,25 @@ class TestHoughIndexing:
         angles = xmap.orientations.angle_with(xmap_ref.orientations, degrees=True)
         assert np.all(angles < 1)
 
+    def test_hough_indexing_single_pattern(self):
+        """Indexing a single pattern without navigation axes gives a
+        crystal map of a single point.
+        """
+        s = self.signal.inav[1, 1]
+        assert s.axes_manager.navigation_dimension == 0
+        det = s.detector.deepcopy()
+        det.pc = det.pc_average
+        phase_list = self.signal.xmap.phases
+        indexer = det.get_indexer(phase_list)
+
+        xmap = s.hough_indexing(phase_list, indexer, verbose=0)
+        assert xmap.size == 1
+        assert xmap.shape == ()
+        angle = xmap.orientations.angle_with(
+            self.signal.xmap[1, 1].orientations, degrees=True
+        )
+        assert angle[0] < 1
+
     def test_hough_indexing_lazy(self):
         s = self.signal.as_lazy()
 
