@@ -119,6 +119,11 @@ def optimize_remove_dynamic_background(
     fixed or searched, as described in
     :func:`~kikuchipy.pattern.optimize_pattern_processing`.
 
+    This Bayesian optimization of pattern processing parameters was
+    first presented in :cite:`griesbach2026ferroelectric` and
+    :cite:`griesbach2026global` to map ferroelectric polarization
+    domains.
+
     Parameters
     ----------
     pattern
@@ -173,13 +178,6 @@ def optimize_remove_dynamic_background(
     optimize_adaptive_histogram_equalization,
     optimize_bandpass_filter,
     optimize_pattern_processing
-
-    Notes
-    -----
-    This Bayesian optimization of pattern processing parameters was
-    first presented in :cite:`griesbach2026ferroelectric` and
-    :cite:`griesbach2026global` to map ferroelectric polarization
-    domains.
     """
     return optimize_pattern_processing(
         pattern,
@@ -221,6 +219,11 @@ def optimize_adaptive_histogram_equalization(
     for a description of the processing parameters. Each parameter is
     either fixed or searched, as described in
     :func:`~kikuchipy.pattern.optimize_pattern_processing`.
+
+    This Bayesian optimization of pattern processing parameters was
+    first presented in :cite:`griesbach2026ferroelectric` and
+    :cite:`griesbach2026global` to map ferroelectric polarization
+    domains.
 
     Parameters
     ----------
@@ -273,13 +276,6 @@ def optimize_adaptive_histogram_equalization(
     optimize_remove_dynamic_background,
     optimize_bandpass_filter,
     optimize_pattern_processing
-
-    Notes
-    -----
-    This Bayesian optimization of pattern processing parameters was
-    first presented in :cite:`griesbach2026ferroelectric` and
-    :cite:`griesbach2026global` to map ferroelectric polarization
-    domains.
     """
     return optimize_pattern_processing(
         pattern,
@@ -322,6 +318,11 @@ def optimize_bandpass_filter(
     :func:`~kikuchipy.pattern.fft_filter`. Each parameter is either
     fixed or searched, as described in
     :func:`~kikuchipy.pattern.optimize_pattern_processing`.
+
+    This Bayesian optimization of pattern processing parameters was
+    first presented in :cite:`griesbach2026ferroelectric` and
+    :cite:`griesbach2026global` to map ferroelectric polarization
+    domains.
 
     Parameters
     ----------
@@ -384,11 +385,6 @@ def optimize_bandpass_filter(
     ``kp.filters.bandpass_fft_filter(s.detector.shape, **result["parameters"]["bandpass_filter"])``
     and pass it to :meth:`~kikuchipy.signals.EBSD.fft_filter` with
     ``function_domain="frequency" and ``shift=True``.
-
-    This Bayesian optimization of pattern processing parameters was
-    first presented in :cite:`griesbach2026ferroelectric` and
-    :cite:`griesbach2026global` to map ferroelectric polarization
-    domains.
     """
     return optimize_pattern_processing(
         pattern,
@@ -429,6 +425,11 @@ def optimize_pattern_processing(
     and the parameters of all steps are searched simultaneously. Each
     candidate is scored by the normalized cross-correlation (NCC)
     between the processed *pattern* and *reference*.
+
+    This Bayesian optimization of pattern processing parameters was
+    first presented in :cite:`griesbach2026ferroelectric` and
+    :cite:`griesbach2026global` to map ferroelectric polarization
+    domains.
 
     Parameters
     ----------
@@ -555,11 +556,6 @@ def optimize_pattern_processing(
     for :meth:`~kikuchipy.signals.EBSD.fft_filter`. In the latter case,
     remember to pass ``function_domain="frequency", shift=True`` to
     ``fft_filter()``.
-
-    This Bayesian optimization of pattern processing parameters was
-    first presented in :cite:`griesbach2026ferroelectric` and
-    :cite:`griesbach2026global` to map ferroelectric polarization
-    domains.
     """
     # Validate method
     optimization_methods = get_args(OPTIMIZATION_METHODS)
