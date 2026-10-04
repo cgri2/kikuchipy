@@ -16,22 +16,27 @@
 # You should have received a copy of the GNU General Public License
 # along with kikuchipy. If not, see <http://www.gnu.org/licenses/>.
 #
+
 """
-================================
+===============================
 Pattern processing optimization
-================================
+===============================
 
-This example shows how to search for pattern processing parameters that best
-match a single experimental pattern to a simulated reference, using
-:func:`kikuchipy.pattern.optimize_pattern_processing`.
+This example shows how to search for pattern processing parameters that best match a
+single experimental pattern to a simulated reference pattern, using Bayesian
+optimization from the optional dependency bayesian-optimization or local optimization
+with the Nelder-Mead method.
 
-The search covers dynamic background subtraction, (optional) adaptive
-histogram equalization, and FFT bandpass filtering, in that order, scoring
-each candidate pipeline by normalized cross-correlation (NCC) against the
-reference pattern via Bayesian optimization
-(:func:`skopt.gp_minimize`, from the optional dependency
-:mod:`scikit-optimize`). The processing steps themselves are all existing
-public kikuchipy functionality; only the search over their parameters is new.
+Each candidate is scored by the normalized cross-correlation (NCC) between the processed
+and the reference pattern. Three processing steps can be optimized, either one at a time
+or together:
+
+* Dynamic background removal:
+  :func:`~kikuchipy.pattern.optimize_remove_dynamic_background`
+* Adaptive histogram equalization:
+  :func:`~kikuchipy.pattern.optimize_adaptive_histogram_equalization`
+* FFT bandpass filtering: :func:`~kikuchipy.pattern.optimize_bandpass_filter`
+* All of the above, in any order: :func:`~kikuchipy.pattern.optimize_pattern_processing`
 """
 
 # %%
@@ -44,78 +49,131 @@ import kikuchipy as kp
 hs.preferences.General.show_progressbar = False
 
 # %%
-# Get a real experimental pattern and a matching simulated reference for it.
+# Get experimental patterns and a suitable signal mask, remove the static background,
+# and simulate matching reference patterns from the known orientations.
 s = kp.data.nickel_ebsd_small()
-mp = kp.data.nickel_ebsd_master_pattern_small(projection="lambert")
+print(s)
 
-rotations = s.xmap.rotations.reshape(*s.xmap.shape)
+signal_mask = kp.pattern.get_signal_mask(s.data[0, 0])
+
+s.remove_static_background()
+
+mp = kp.data.nickel_ebsd_master_pattern_small(projection="lambert")
 sim = mp.get_patterns(
-    rotations=rotations, detector=s.detector, energy=20, dtype_out="uint8", compute=True
+    rotations=s.xmap.rotations.reshape(*s.xmap.shape),
+    detector=s.detector,
+    energy=20,
+    dtype_out="uint8",
+    compute=True,
 )
 
-# Pick one map point to optimize the processing recipe for
-i, j = 1, 1
-pattern = s.inav[i, j].data.copy()
-reference = sim.inav[i, j].data.copy()
+# Pick one pattern to optimize the processing for
+pattern = s.data[1, 1]
+reference = sim.data[1, 1]
 
 # %%
-# Run the Bayesian optimization.
+# Optimize the parameters of a single processing step, here the dynamic background
+# removal. By default, the standard deviation of the Gaussian window is searched in a
+# range relative to the pattern width, while the window truncation is searched in a
+# fixed range.
+result_dbr = kp.pattern.optimize_remove_dynamic_background(
+    pattern,
+    reference,
+    operation="divide",
+    n_calls=20,
+    random_state=0,
+    signal_mask=signal_mask,
+)
+print(result_dbr["parameters"]["remove_dynamic_background"])
+
+# %%
+# Optimize the parameters of all three steps together, in the given order. By default,
+# only dynamic background removal and bandpass filtering are optimized. The
+# parameters of each step are passed as a dictionary named after the step. Each
+# parameter is either fixed (a single value) or searched (a range or a list of
+# candidates). Parameters not given use the defaults of the single step function. Here,
+# we fix the number of histogram bins in the adaptive histogram equalization and search
+# a custom range of lowpass filter cutoffs.
 #
-# ``n_calls``/``n_initial_points`` are reduced here to keep this example
-# quick to run; for real work, values closer to the defaults (150/12) give
-# the search more room to converge.
+# ``n_calls`` is reduced here to keep this example quick to run; for real work, values
+# closer to the default of 150 give the search more room to converge. To follow the
+# progress of longer optimizations, set the log level with
+# ``kp.set_log_level("INFO")``.
+steps = (
+    "remove_dynamic_background",
+    "adaptive_histogram_equalization",
+    "bandpass_filter",
+)
 result = kp.pattern.optimize_pattern_processing(
     pattern,
     reference,
-    n_calls=30,
-    n_initial_points=8,
+    steps=steps,
+    remove_dynamic_background={"operation": "divide"},
+    adaptive_histogram_equalization={"nbins": 256},
+    bandpass_filter={"lowpass_cutoff": 23},
+    n_calls=40,
     random_state=0,
+    signal_mask=signal_mask,
 )
-
-print("Best parameters:", result["best_parameters"])
-print("Best NCC score:", result["best_score"])
+print("Best parameters:", result["parameters"])
+print(f"Best NCC: {result['score']:.4f}")
 
 # %%
-# Plot the pattern at each processing stage, labeled with its image quality
-# (IQ) and normalized cross-correlation (NCC) against the reference.
+# By default, the parameters are found by Bayesian optimization. Alternatively, a local
+# optimization with the Nelder-Mead method can be used, starting from the center of the
+# search space and restarting twice from the best parameters so far, slightly perturbed.
+# This is typically several times faster, while it might converge to a local maximum.
+result_nm = kp.pattern.optimize_pattern_processing(
+    pattern,
+    reference,
+    steps=steps,
+    method="nelder-mead",
+    remove_dynamic_background={"operation": "divide"},
+    adaptive_histogram_equalization={"nbins": 256},
+    bandpass_filter={"lowpass_cutoff": 23},
+    random_state=0,
+    signal_mask=signal_mask,
+)
+print(f"Best NCC (Nelder-Mead): {result_nm['score']:.4f}")
+
+# %%
+# Plot the pattern after each processing step, labeled with its image quality (IQ) and
+# NCC against the reference.
 fig = kp.draw.plot_pattern_processing_result(result, reference=reference)
-fig.savefig("pattern_processing_optimization_result.png", dpi=100)
-plt.show()
-
 
 # %%
-# Apply the optimized parameters to the full pattern stack.
-#
-# ``optimize_pattern_processing()`` works on a single pattern. To apply the
-# chosen parameters to every pattern in the map, pass them to the
-# corresponding public :class:`~kikuchipy.signals.EBSD` methods.
-params = result["best_parameters"]
-pattern_shape = s.axes_manager.signal_shape[::-1]
+# Apply the optimized parameters to all patterns. The dynamic background removal and
+# adaptive histogram equalization parameters can be passed directly to the
+# corresponding :class:`~kikuchipy.signals.EBSD` methods, while the bandpass filter
+# parameters are passed to :func:`~kikuchipy.filters.bandpass_fft_filter` to create the
+# filter for :meth:`~kikuchipy.signals.EBSD.fft_filter`.
+params = result["parameters"]
 
 s2 = s.deepcopy()
-s2.remove_dynamic_background(
-    operation="subtract",
-    filter_domain="frequency",
-    std=int(params["dynamic_background_std"]),
-    truncate=int(params["dynamic_background_truncate"]),
+
+s2.remove_dynamic_background(**params["remove_dynamic_background"])
+
+s2.adaptive_histogram_equalization(**params["adaptive_histogram_equalization"])
+
+w = kp.filters.bandpass_fft_filter(s2.detector.shape, **params["bandpass_filter"])
+s2.fft_filter(transfer_function=w, function_domain="frequency", shift=True)
+
+# %%
+# Compare the processed patterns to the simulated ones.
+_ = hs.plot.plot_images(
+    [
+        s2.inav[:3, 0].normalize_intensity(dtype_out="float32", inplace=False)
+        * ~signal_mask,
+        sim.inav[:3, 0].normalize_intensity(dtype_out="float32", inplace=False)
+        * ~signal_mask,
+    ],
+    per_row=3,
+    cmap="gray",
+    vmin=-3,
+    vmax=3,
+    axes_decor="off",
+    label=None,
+    colorbar=False,
+    tight_layout=True,
 )
-if params["ahe_on"]:
-    kernel_size = int(params["ahe_kernel_size"])
-    s2.adaptive_histogram_equalization(
-        kernel_size=(kernel_size, kernel_size),
-        clip_limit=float(params["ahe_clip_limit"]),
-        nbins=int(params["ahe_nbins"]),
-    )
-w_low = kp.filters.Window(
-    window="lowpass",
-    cutoff=int(params["fft_lowpass_cutoff"]),
-    cutoff_width=10,
-    shape=pattern_shape,
-)
-w_high = kp.filters.Window(
-    window="highpass",
-    cutoff=int(params["fft_highpass_cutoff"]),
-    cutoff_width=2,
-    shape=pattern_shape,
-)
-s2.fft_filter(transfer_function=w_low * w_high, function_domain="frequency", shift=True)
+plt.show()

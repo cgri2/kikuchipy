@@ -791,6 +791,10 @@ def get_signal_mask(
     RuntimeError
         If *threshold* is not given and the minimum method fails to
         find a threshold.
+
+    See Also
+    --------
+    skimage.filters.threshold_minimum
     """
     pattern = np.asarray(pattern)
     if pattern.ndim != 2:
@@ -799,12 +803,12 @@ def get_signal_mask(
     if threshold is None:
         try:
             threshold = threshold_minimum(pattern)
-        except RuntimeError as e:
+        except RuntimeError as err:
             raise RuntimeError(
                 "Could not find a threshold with the minimum method, as the pattern "
                 "intensity histogram does not have two maxima. Pass a threshold, e.g. "
                 "from another thresholding method in skimage.filters."
-            ) from e
+            ) from err
 
     return pattern < threshold
 

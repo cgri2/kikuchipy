@@ -27,89 +27,80 @@ import matplotlib.figure as mfigure
 import matplotlib.pyplot as plt
 import numpy as np
 
+from kikuchipy.pattern._processing_optimization import _STEPS
+
 
 def plot_pattern_processing_result(
     result: dict[str, Any],
     reference: np.ndarray | None = None,
-    figsize: tuple[float, float] = (15, 6),
+    figsize: tuple[float, float] | None = None,
 ) -> mfigure.Figure:
-    """Plot the pattern from each stage of a
-    :func:`~kikuchipy.pattern.optimize_pattern_processing` result,
-    annotated with the image quality and normalized cross-correlation
-    at that stage.
-
-    This is a diagnostic plot only; it does not save anything to disk.
-    Call :meth:`matplotlib.figure.Figure.savefig` on the returned
-    figure to do so.
+    """Plot the pattern before and after each processing step of a
+    pattern processing optimization result, annotated with the image
+    quality and normalized cross-correlation after that step.
 
     Parameters
     ----------
     result
         Dictionary returned by
-        :func:`~kikuchipy.pattern.optimize_pattern_processing`.
+        :func:`~kikuchipy.pattern.optimize_pattern_processing` or one of
+        the single step optimization functions, like
+        :func:`~kikuchipy.pattern.optimize_remove_dynamic_background`.
     reference
-        Reference pattern the optimization was scored against. If
-        given, it is shown as an extra panel for comparison.
+        Reference pattern the optimization was scored against. If given,
+        it is shown as an extra panel for comparison.
     figsize
         Figure size in inches, passed to
-        :func:`matplotlib.pyplot.subplots`.
+        :func:`matplotlib.pyplot.subplots`. If not given, it is set
+        based on the number of patterns.
 
     Returns
     -------
     fig
-        Figure with one column per processing stage (plus one for
-        *reference* if given), showing the pattern on top and its
-        intensity histogram below. Each pattern's column is titled
-        with its stage name, image quality (IQ), and normalized
-        cross-correlation (NCC).
-
-    Examples
-    --------
-    >>> import kikuchipy as kp
-    >>> s = kp.data.nickel_ebsd_small(allow_download=True).inav[0, 0]  # doctest: +SKIP
-    >>> mp = kp.data.nickel_ebsd_master_pattern_small()  # doctest: +SKIP
-    >>> simulated = mp.get_patterns(...)  # doctest: +SKIP
-    >>> result = kp.pattern.optimize_pattern_processing(
-    ...     s.data, simulated.data
-    ... )  # doctest: +SKIP
-    >>> fig = kp.draw.plot_pattern_processing_result(
-    ...     result, reference=simulated.data
-    ... )  # doctest: +SKIP
+        Figure with one column per pattern, showing the pattern on top
+        and its intensity histogram below. Each pattern is titled with
+        the processing steps applied, its image quality (IQ), and its
+        normalized cross-correlation (NCC). Pixels masked out by the
+        result's signal mask are not shown and not included in the
+        histograms.
     """
-    stage_titles = {
-        "raw": "No processing",
-        "dynamic_background": "DBS",
-        "ahe": "DBS + AHE",
-        "fft": "DBS + AHE + FFT",
-    }
-    stage_keys = list(stage_titles.keys())
-    image_quality = result["image_quality"]
-    ncc = result["normalized_cross_correlation"]
+    labels = []
+    for step in result["steps"]:
+        label = _STEPS[step].label
+        labels.append(label if not labels else f"{labels[-1]} + {label}")
+    labels = ["Raw"] + labels
 
-    patterns = [result["patterns"][key] for key in stage_keys]
-    titles = [
-        f"{stage_titles[key]}\nIQ={iq:.3f}, NCC={n:.3f}"
-        for key, iq, n in zip(stage_keys, image_quality, ncc)
-    ]
-
+    patterns = list(result["patterns"].values())
+    titles = []
+    for label, iq, ncc in zip(
+        labels, result["image_quality"], result["normalized_cross_correlation"]
+    ):
+        titles.append(f"{label}\nIQ={iq:.3f}, NCC={ncc:.4f}")
     if reference is not None:
         patterns = [reference] + patterns
-        titles = ["Simulated"] + titles
+        titles = ["Reference"] + titles
+
+    signal_mask = result.get("signal_mask")
+    if signal_mask is None:
+        signal_mask = np.zeros(patterns[0].shape, dtype=bool)
 
     n_patterns = len(patterns)
+    if figsize is None:
+        figsize = (3 * n_patterns, 4.5)
     fig, axes = plt.subplots(
         nrows=2,
         ncols=n_patterns,
         figsize=figsize,
+        squeeze=False,
         gridspec_kw={"height_ratios": [3, 1.5]},
     )
 
-    for ax, pat, title in zip(axes[0], patterns, titles):
-        ax.imshow(pat, cmap="gray", vmin=pat.min(), vmax=pat.max())
-        ax.set_title(title, fontsize=9)
-        ax.axis("off")
-    for ax, pat in zip(axes[1], patterns):
-        ax.hist(np.asarray(pat).ravel(), bins=100)
+    for ax_pattern, ax_hist, pattern, title in zip(*axes, patterns, titles):
+        pattern = np.ma.masked_array(pattern, mask=signal_mask)
+        ax_pattern.imshow(pattern, cmap="gray")
+        ax_pattern.set_title(title, fontsize=9)
+        ax_pattern.axis("off")
+        ax_hist.hist(pattern.compressed(), bins=100)
 
     fig.tight_layout()
 
