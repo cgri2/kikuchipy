@@ -26,6 +26,7 @@ import numpy as np
 from scipy.fft import fft2, fftshift, ifft2, ifftshift, irfft2, rfft2
 from scipy.ndimage import gaussian_filter
 from skimage.exposure import equalize_adapthist
+from skimage.filters import threshold_minimum
 from skimage.util.dtype import dtype_range
 
 from kikuchipy.filters.fft_barnes import _fft_filter, _fft_filter_setup
@@ -750,6 +751,62 @@ def get_image_quality(
         inertia_max = np.sum(frequency_vectors) / (sy * sx)
 
     return _get_image_quality(pattern, normalize, frequency_vectors, inertia_max)
+
+
+def get_signal_mask(
+    pattern: np.ndarray, threshold: int | float | None = None
+) -> np.ndarray:
+    """Return a signal mask of pixels without Kikuchi diffraction in an
+    EBSD pattern, found by intensity thresholding.
+
+    Pixels with intensities below the threshold, typically the detector
+    corners outside a circular phosphor screen, are masked out.
+
+    Parameters
+    ----------
+    pattern
+        EBSD pattern, e.g. the mean pattern of a dataset or its static
+        background. An average pattern is less influenced by noise and
+        Kikuchi bands than a single pattern.
+    threshold
+        Intensity threshold. If not given, it is found with the minimum
+        method in :func:`skimage.filters.threshold_minimum`, which
+        assumes a histogram with two maxima. Other thresholding methods
+        in :mod:`skimage.filters` might work better for other patterns,
+        and their threshold can be passed here.
+
+    Returns
+    -------
+    signal_mask
+        Boolean mask of the same shape as *pattern*, where pixels to
+        exclude are True. This follows the convention of signal masks
+        in kikuchipy, e.g. in
+        :meth:`~kikuchipy.signals.EBSD.refine_orientation` and
+        :func:`~kikuchipy.pattern.optimize_pattern_processing`.
+
+    Raises
+    ------
+    ValueError
+        If *pattern* is not 2D.
+    RuntimeError
+        If *threshold* is not given and the minimum method fails to
+        find a threshold.
+    """
+    pattern = np.asarray(pattern)
+    if pattern.ndim != 2:
+        raise ValueError(f"Pattern must be 2D, not of shape {pattern.shape}")
+
+    if threshold is None:
+        try:
+            threshold = threshold_minimum(pattern)
+        except RuntimeError as e:
+            raise RuntimeError(
+                "Could not find a threshold with the minimum method, as the pattern "
+                "intensity histogram does not have two maxima. Pass a threshold, e.g. "
+                "from another thresholding method in skimage.filters."
+            ) from e
+
+    return pattern < threshold
 
 
 def _get_image_quality(

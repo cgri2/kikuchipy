@@ -68,7 +68,7 @@ w = kp.filters.bandpass_fft_filter(
 center = s.detector.shape[0] // 2
 distance = np.arange(s.detector.shape[1]) - s.detector.shape[1] // 2
 
-fig, (ax0, ax1) = plt.subplots(ncols=2, figsize=(9, 4), layout="tight")
+fig, (ax0, ax1) = plt.subplots(ncols=2, figsize=(9, 4), layout="constrained")
 im = ax0.imshow(w, cmap="viridis")
 ax0.set_title("Transfer function")
 ax0.axis("off")
