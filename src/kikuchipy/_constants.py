@@ -19,6 +19,7 @@ deps_for_version_check = [
     "rosettasciio",
     "scikit-image",
     # Optional
+    "bayesian-optimization",
     "ebsdsim",
     "IPython",
     "ipywidgets",
@@ -27,7 +28,6 @@ deps_for_version_check = [
     "psygnal",
     "pyvista",
     "pyebsdindex",
-    "scikit-optimize",
 ]
 dependency_version: dict[str, Version | None] = {}
 for dep in deps_for_version_check:
